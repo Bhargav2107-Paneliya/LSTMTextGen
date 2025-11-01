@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Word Predictor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --secondary-color: #818cf8;
+            --background-color: #f8fafc;
+            --text-color: #1e293b;
+            --suggestion-bg: #e0e7ff;
+            --suggestion-hover: #c7d2fe;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        }
+
+        h1 {
+            margin: 0 0 1.5rem 0;
+            font-size: 2rem;
+            font-weight: 600;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h1::before {
+            content: '🤖';
+            font-size: 1.8rem;
+        }
+
+        .input-area {
+            width: 100%;
+            min-height: 120px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-family: 'Poppins', sans-serif;
+            resize: vertical;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            background-color: #fff;
+            box-sizing: border-box;
+        }
+
+        .input-area:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .suggestions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+            min-height: 48px;
+            position: relative;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary-color);
+            font-size: 0.875rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .loading.active {
+            opacity: 1;
+        }
+
+        .loading::before {
+            content: '⏳';
+            animation: spin 1s linear infinite;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .suggestion-btn {
+            padding: 0.75rem 1.25rem;
+            background-color: var(--suggestion-bg);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'Poppins', sans-serif;
+            font-size: 0.9rem;
+            color: var(--primary-color);
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            opacity: 0;
+            animation: fadeIn 0.2s ease forwards;
+            animation-delay: calc(var(--index) * 0.1s);
+            box-sizing: border-box;
+            height: 40px;
+            line-height: 1;
+            position: relative;
+        }
+
+        .suggestion-btn::before {
+            content: '✨';
+            font-size: 1rem;
+        }
+
+        .suggestion-btn:hover {
+            background-color: var(--suggestion-hover);
+            transform: translateY(-1px);
+        }
+
+        .suggestion-btn.selected {
+            background-color: var(--primary-color);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .suggestion-btn.selected::before {
+            content: '✓';
+        }
+
+        .tab-hint {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--primary-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .suggestion-btn.selected .tab-hint {
+            opacity: 1;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .suggestion-btn.selected {
+            animation: pulse 1s infinite;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            padding: 0.5rem 1rem;
+            background-color: var(--suggestion-bg);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Poppins', sans-serif;
+            font-size: 0.875rem;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background-color: var(--suggestion-hover);
+        }
+
+        .control-btn::before {
+            font-size: 1rem;
+        }
+
+        .clear-btn::before {
+            content: '🗑️';
+        }
+
+        .auto-complete-btn {
+            position: relative;
+        }
+
+        .auto-complete-btn::after {
+            content: '🔢';
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            font-size: 0.75rem;
+            background: var(--primary-color);
+            color: white;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .auto-complete-btn:hover::after {
+            opacity: 1;
+        }
+
+        .auto-complete-btn::before {
+            content: '✍️';
+        }
+
+        .auto-complete-btn.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .auto-complete-btn.active::before {
+            content: '⏹️';
+        }
+
+        .auto-complete-btn.active::after {
+            content: attr(data-remaining);
+            opacity: 1;
+        }
+
+        .auto-complete-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        .auto-complete-status.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .auto-complete-status::before {
+            content: '🤖';
+        }
+
+        .auto-complete-status .stop-hint {
+            margin-left: 8px;
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .auto-complete-status.active {
+            animation: fadeInUp 0.3s ease forwards;
+        }
+
+        .copy-btn::before {
+            content: '📋';
+        }
+
+        .ai-status {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-top: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .ai-status::before {
+            content: '⚡';
+        }
+
+        .word-count {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .word-count::before {
+            content: '📝';
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 1rem;
+            }
+            .container {
+                padding: 1.5rem;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+            .suggestion-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.875rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Word Predictor</h1>
+        <div class="controls">
+            <button class="control-btn clear-btn" onclick="clearText()">Clear Text</button>
+            <button class="control-btn auto-complete-btn" onclick="toggleAutoComplete()">Auto Complete</button>
+            <button class="control-btn copy-btn" onclick="copyText()">Copy Text</button>
+        </div>
+        <textarea id="input" class="input-area" placeholder="Start typing and let AI help you complete your thoughts..."></textarea>
+        <div id="suggestions" class="suggestions">
+            <div class="loading">Thinking...</div>
+        </div>
+        <div class="error-message">Sorry, the model is taking longer than expected. Please try again.</div>
+        <div class="word-count">Words: <span id="wordCount">0</span></div>
+        <div class="ai-status">Powered by advanced LSTM neural network</div>
+    </div>
+    <div class="auto-complete-status">
+        Auto-completing... <span class="stop-hint">(Press Esc to stop)</span>
+    </div>
+
+    <script>
+        const input = document.getElementById('input');
+        const suggestionsDiv = document.getElementById('suggestions');
+        const wordCountSpan = document.getElementById('wordCount');
+        const autoCompleteBtn = document.querySelector('.auto-complete-btn');
+        const loadingIndicator = document.querySelector('.loading');
+        const errorMessage = document.querySelector('.error-message');
+        let timeout = null;
+        let isAutoCompleting = false;
+        let autoCompleteInterval = null;
+        const MAX_AUTO_COMPLETE_WORDS = 10;
+        let autoCompleteWordCount = 0;
+        let isPredicting = false;
+        const PREDICTION_DEBOUNCE = 300;
+        const PREDICTION_TIMEOUT = 5000;
+        let selectedSuggestionIndex = -1;
+        const autoCompleteStatus = document.querySelector('.auto-complete-status');
+
+        function showLoading() {
+            loadingIndicator.classList.add('active');
+            errorMessage.classList.remove('active');
+        }
+
+        function hideLoading() {
+            loadingIndicator.classList.remove('active');
+        }
+
+        function showError() {
+            errorMessage.classList.add('active');
+            hideLoading();
+        }
+
+        function updateWordCount() {
+            const text = input.value.trim();
+            const wordCount = text ? text.split(/\s+/).length : 0;
+            wordCountSpan.textContent = wordCount;
+        }
+
+        function clearText() {
+            input.value = '';
+            suggestionsDiv.innerHTML = '<div class="loading">Thinking...</div>';
+            updateWordCount();
+            stopAutoComplete();
+            hideLoading();
+            errorMessage.classList.remove('active');
+            selectedSuggestionIndex = -1;
+        }
+
+        function copyText() {
+            const text = input.value;
+            if (text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const copyBtn = document.querySelector('.copy-btn');
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => {
+                        copyBtn.textContent = originalText;
+                    }, 2000);
+                });
+            }
+        }
+
+        function toggleAutoComplete() {
+            if (isAutoCompleting) {
+                stopAutoComplete();
+            } else {
+                startAutoComplete();
+            }
+        }
+
+        function updateAutoCompleteStatus() {
+            const remaining = MAX_AUTO_COMPLETE_WORDS - autoCompleteWordCount;
+            autoCompleteBtn.setAttribute('data-remaining', remaining);
+            
+            if (isAutoCompleting) {
+                autoCompleteStatus.classList.add('active');
+                autoCompleteStatus.textContent = `Auto-completing... ${remaining} words left `;
+                const stopHint = document.createElement('span');
+                stopHint.className = 'stop-hint';
+                stopHint.textContent = '(Press Esc to stop)';
+                autoCompleteStatus.appendChild(stopHint);
+            } else {
+                autoCompleteStatus.classList.remove('active');
+            }
+        }
+
+        function startAutoComplete() {
+            if (isAutoCompleting) return;
+            isAutoCompleting = true;
+            autoCompleteBtn.classList.add('active');
+            autoCompleteWordCount = 0;
+            updateAutoCompleteStatus();
+            
+            // Force immediate prediction on first click
+            const text = input.value.trim();
+            if (text) {
+                getPredictions(true);
+            } else {
+                // If no text, add a space to trigger prediction
+                input.value = ' ';
+                updateWordCount();
+                getPredictions(true);
+            }
+        }
+
+        function stopAutoComplete() {
+            if (!isAutoCompleting) return;
+            isAutoCompleting = false;
+            autoCompleteBtn.classList.remove('active');
+            autoCompleteStatus.classList.remove('active');
+            if (autoCompleteInterval) {
+                clearInterval(autoCompleteInterval);
+                autoCompleteInterval = null;
+            }
+            // Trigger new predictions immediately after stopping auto-complete
+            getPredictions();
+        }
+
+        function selectSuggestion(index) {
+            const buttons = suggestionsDiv.getElementsByClassName('suggestion-btn');
+            for (let i = 0; i < buttons.length; i++) {
+                buttons[i].classList.remove('selected');
+            }
+            if (index >= 0 && index < buttons.length) {
+                buttons[index].classList.add('selected');
+                selectedSuggestionIndex = index;
+            } else {
+                selectedSuggestionIndex = -1;
+            }
+        }
+
+        function applySelectedSuggestion() {
+            if (selectedSuggestionIndex >= 0) {
+                const buttons = suggestionsDiv.getElementsByClassName('suggestion-btn');
+                if (selectedSuggestionIndex < buttons.length) {
+                    buttons[selectedSuggestionIndex].click();
+                }
+            }
+        }
+
+        function getPredictions(isAutoComplete = false) {
+            if (isPredicting) return;
+            
+            const text = input.value.trim();
+            if (text) {
+                isPredicting = true;
+                showLoading();
+                
+                const predictionTimeout = setTimeout(() => {
+                    showError();
+                    isPredicting = false;
+                }, PREDICTION_TIMEOUT);
+
+                fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: text })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    clearTimeout(predictionTimeout);
+                    hideLoading();
+                    isPredicting = false;
+                    
+                    suggestionsDiv.innerHTML = '';
+                    data.suggestions.forEach((suggestion, index) => {
+                        const button = document.createElement('button');
+                        button.className = 'suggestion-btn';
+                        button.style.setProperty('--index', index);
+                        button.textContent = suggestion;
+                        
+                        const tabHint = document.createElement('span');
+                        tabHint.className = 'tab-hint';
+                        tabHint.textContent = 'Press Tab to select';
+                        button.appendChild(tabHint);
+                        
+                        button.onclick = () => {
+                            const lastChar = input.value.slice(-1);
+                            const space = lastChar === ' ' ? '' : ' ';
+                            input.value += space + suggestion;
+                            input.focus();
+                            updateWordCount();
+                            getPredictions();
+                        };
+                        suggestionsDiv.appendChild(button);
+                    });
+
+                    selectedSuggestionIndex = -1;
+
+                    if (isAutoComplete && data.suggestions.length > 0 && isAutoCompleting) {
+                        if (autoCompleteWordCount >= MAX_AUTO_COMPLETE_WORDS) {
+                            stopAutoComplete();
+                            return;
+                        }
+
+                        const firstSuggestion = data.suggestions[0];
+                        const lastChar = input.value.slice(-1);
+                        const space = lastChar === ' ' ? '' : ' ';
+                        input.value += space + firstSuggestion;
+                        updateWordCount();
+                        autoCompleteWordCount++;
+                        updateAutoCompleteStatus();
+                        
+                        if (autoCompleteWordCount < MAX_AUTO_COMPLETE_WORDS && isAutoCompleting) {
+                            getPredictions(true);
+                        } else {
+                            stopAutoComplete();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showError();
+                    isPredicting = false;
+                    stopAutoComplete();
+                });
+            } else {
+                suggestionsDiv.innerHTML = '<div class="loading">Thinking...</div>';
+                hideLoading();
+                stopAutoComplete();
+            }
+        }
+
+        // Handle keyboard events
+        input.addEventListener('keydown', function(e) {
+            if (isAutoCompleting) {
+                stopAutoComplete();
+            }
+
+            const buttons = suggestionsDiv.getElementsByClassName('suggestion-btn');
+            if (buttons.length > 0) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    if (selectedSuggestionIndex === -1) {
+                        selectSuggestion(0);
+                    } else {
+                        applySelectedSuggestion();
+                    }
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    selectSuggestion((selectedSuggestionIndex + 1) % buttons.length);
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    selectSuggestion((selectedSuggestionIndex - 1 + buttons.length) % buttons.length);
+                } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+                    e.preventDefault();
+                    applySelectedSuggestion();
+                }
+            }
+        });
+
+        input.addEventListener('input', function() {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                getPredictions();
+                updateWordCount();
+            }, PREDICTION_DEBOUNCE);
+        });
+    </script>
+</body>
+</html> 
